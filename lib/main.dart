@@ -223,8 +223,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _refreshData();
-      Future.delayed(const Duration(milliseconds: 300), () {
-        checkMissedDays();
+
+      Future.delayed(const Duration(milliseconds: 300), () async {
+        await checkMissedDays();
+
+        // 🔥 МИНИ-ФИКС: фиксируем день при возврате в приложение
+        if (todayPoints > 0 || todayHabits.isNotEmpty) {
+          await endDay();
+        }
       });
     }
   }
