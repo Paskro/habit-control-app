@@ -3,6 +3,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:async';
 import 'services/storage_service.dart';
+import 'models/habit.dart';
+import 'models/day_record.dart';
+import 'models/session.dart';
 
 void main() {
   runApp(const MyApp());
@@ -62,26 +65,7 @@ class _EntryPointState extends State<EntryPoint> {
   }
 }
 
-class Habit {
-  final String name;
-  final int points;
 
-  Habit({required this.name, required this.points});
-
-  Map<String, dynamic> toJson() {
-    return {
-      'name': name,
-      'points': points,
-    };
-  }
-
-  factory Habit.fromJson(Map<String, dynamic> json) {
-    return Habit(
-      name: json['name'],
-      points: json['points'],
-    );
-  }
-}
 
 enum SessionMode {
   manualLimit,
@@ -89,79 +73,9 @@ enum SessionMode {
   stats7,
 }
 
-class DayRecord {
-  final String date;
-  final int points;
-  final bool exceeded;
-  final Map<String, int> habits;
-  final int sessionId;
 
-  DayRecord({
-    required this.date,
-    required this.points,
-    required this.exceeded,
-    required this.habits,
-    required this.sessionId,
-  });
 
-  Map<String, dynamic> toJson() {
-    return {
-      'date': date,
-      'points': points,
-      'exceeded': exceeded,
-      'habits': habits,
-      'sessionId': sessionId,
-    };
-  }
 
-  factory DayRecord.fromJson(Map<String, dynamic> json) {
-    return DayRecord(
-      date: json['date'],
-      points: json['points'],
-      exceeded: json['exceeded'],
-      habits: Map<String, int>.from(json['habits'] ?? {}),
-      sessionId: json['sessionId'] ?? 0,
-    );
-  }
-}
-
-class Session {
-  final int id;
-  final List<DayRecord> days;
-  final int avg;
-  final int totalPoints;
-  final int controlDays;
-
-  Session({
-    required this.id,
-    required this.days,
-    required this.avg,
-    required this.totalPoints,
-    required this.controlDays,
-  });
-
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'avg': avg,
-      'totalPoints': totalPoints,
-      'controlDays': controlDays,
-      'days': days.map((e) => e.toJson()).toList(),
-    };
-  }
-
-  factory Session.fromJson(Map<String, dynamic> json) {
-    return Session(
-      id: json['id'],
-      avg: json['avg'],
-      totalPoints: json['totalPoints'],
-      controlDays: json['controlDays'],
-      days: (json['days'] as List)
-          .map((e) => DayRecord.fromJson(e as Map<String, dynamic>))
-          .toList(),
-    );
-  }
-}
 
 enum Phase {
   statistics,
@@ -411,22 +325,11 @@ Future<void> openHabitSetup() async {
 }
 
   Future<void> loadData() async {
+    habits = await storage.loadHabits();
+    history = await storage.loadHistory();
+    sessions = await storage.loadSessions();
+
     final prefs = await SharedPreferences.getInstance();
-
-    final historyJson = prefs.getStringList('history') ?? [];
-    final sessionsJson = prefs.getStringList('sessions') ?? [];
-    currentSessionId = prefs.getInt('currentSessionId') ?? 1;
-
-
-
-    final habitsMapString = prefs.getString('todayHabits');
-
-    if (habitsMapString != null) {
-      todayHabits = Map<String, int>.from(jsonDecode(habitsMapString));
-    }
-
-    final raw = await storage.loadStringList('habits');
-    habits = raw.map((e) => Habit.fromJson(jsonDecode(e))).toList();
 
     setState(() {
       todayPoints = prefs.getInt('todayPoints') ?? 0;
@@ -436,39 +339,28 @@ Future<void> openHabitSetup() async {
       avgPoints = prefs.getInt('avgPoints') ?? 0;
       dailyLimit = prefs.getInt('dailyLimit') ?? 10;
       reductionPercent = prefs.getDouble('reductionPercent') ?? 0.1;
-
-      history = historyJson
-          .map((e) => DayRecord.fromJson(jsonDecode(e)))
-          .toList();
-
-      sessions = sessionsJson
-          .map((e) => Session.fromJson(jsonDecode(e)))
-          .toList();
+      currentSessionId = prefs.getInt('currentSessionId') ?? 1;
     });
   }
 
-  Future<void> saveData() async {
-    final prefs = await SharedPreferences.getInstance();
+ Future<void> saveData() async {
+   await storage.saveHabits(habits);
 
-    await prefs.setInt('todayPoints', todayPoints);
-    await prefs.setBool('yesterdayExceeded', yesterdayExceeded);
-    await prefs.setInt('phase', phase.index);
-    await prefs.setInt('currentDayIndex', currentDayIndex);
-    await prefs.setInt('avgPoints', avgPoints);
-    await prefs.setInt('dailyLimit', dailyLimit);
-    await prefs.setDouble('reductionPercent', reductionPercent);
-    await prefs.setString('todayHabits', jsonEncode(todayHabits));
+   await storage.saveHistory(history);
+   await storage.saveSessions(sessions);
 
-    final historyJson = history.map((e) => jsonEncode(e.toJson())).toList();
-    await prefs.setStringList('history', historyJson);
+   final prefs = await SharedPreferences.getInstance();
 
-    final sessionsJson = sessions.map((e) => jsonEncode(e.toJson())).toList();
-    await prefs.setStringList('sessions', sessionsJson);
-    await prefs.setInt('currentSessionId', currentSessionId);
-
-    final raw = habits.map((e) => jsonEncode(e.toJson())).toList();
-    await storage.saveStringList('habits', raw);
-  }
+   await prefs.setInt('todayPoints', todayPoints);
+   await prefs.setBool('yesterdayExceeded', yesterdayExceeded);
+   await prefs.setInt('phase', phase.index);
+   await prefs.setInt('currentDayIndex', currentDayIndex);
+   await prefs.setInt('avgPoints', avgPoints);
+   await prefs.setInt('dailyLimit', dailyLimit);
+   await prefs.setDouble('reductionPercent', reductionPercent);
+   await prefs.setString('todayHabits', jsonEncode(todayHabits));
+   await prefs.setInt('currentSessionId', currentSessionId);
+ }
 
   void addHabit(Habit habit) {
     setState(() {
