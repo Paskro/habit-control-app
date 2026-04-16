@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:async';
+import 'services/storage_service.dart';
 
 void main() {
   runApp(const MyApp());
@@ -175,6 +176,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+  final StorageService storage = StorageService();
   int todayPoints = 0;
   List<DayRecord> history = [];
   Phase phase = Phase.statistics;
@@ -415,7 +417,7 @@ Future<void> openHabitSetup() async {
     final sessionsJson = prefs.getStringList('sessions') ?? [];
     currentSessionId = prefs.getInt('currentSessionId') ?? 1;
 
-    final habitsJson = prefs.getStringList('habits') ?? [];
+
 
     final habitsMapString = prefs.getString('todayHabits');
 
@@ -423,9 +425,8 @@ Future<void> openHabitSetup() async {
       todayHabits = Map<String, int>.from(jsonDecode(habitsMapString));
     }
 
-    habits = habitsJson
-        .map((e) => Habit.fromJson(jsonDecode(e)))
-        .toList();
+    final raw = await storage.loadStringList('habits');
+    habits = raw.map((e) => Habit.fromJson(jsonDecode(e))).toList();
 
     setState(() {
       todayPoints = prefs.getInt('todayPoints') ?? 0;
@@ -465,8 +466,8 @@ Future<void> openHabitSetup() async {
     await prefs.setStringList('sessions', sessionsJson);
     await prefs.setInt('currentSessionId', currentSessionId);
 
-    final habitsJson = habits.map((e) => jsonEncode(e.toJson())).toList();
-    await prefs.setStringList('habits', habitsJson);
+    final raw = habits.map((e) => jsonEncode(e.toJson())).toList();
+    await storage.saveStringList('habits', raw);
   }
 
   void addHabit(Habit habit) {
